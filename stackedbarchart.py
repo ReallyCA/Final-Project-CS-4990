@@ -8,7 +8,7 @@ def plot_stacked_forecasts(filepaths):
     for pollutant, path in filepaths.items():
         df = pd.read_csv(path)
 
-        # Assume each forecast CSV has an 'AQI' column with 24 hourly predictions
+        # Each forecast CSV has an 'AQI' column with 24 hourly predictions
         pollutant_data[pollutant] = df['AQI'].values[:24]
 
     # Combine into single DataFrame
