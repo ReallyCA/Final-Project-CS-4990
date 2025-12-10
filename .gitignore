@@ -1,1 +1,5 @@
-git rm --cached *.csv
+# Ignore the cache folder
+cache/
+
+# Ignore all CSV files
+*.csv
