@@ -69,6 +69,19 @@ class JointAQIVAE(nn.Module):
         with torch.no_grad():
             recon = self.decode(z)
         return recon
+    
+def extract_min_max(file_paths):
+    pollutants = ["CO", "NO2", "O3", "PM25", "PM10", "SO2"]
+    aqi_min = {}
+    aqi_max = {}
+
+    for fp, pollutant in zip(file_paths, pollutants):
+        df = pd.read_csv(fp)
+        aqi_col = [c for c in df.columns if "AQI" in c][0]
+        aqi_min[pollutant] = df[aqi_col].min()
+        aqi_max[pollutant] = df[aqi_col].max()
+
+    return aqi_min, aqi_max
 
 def vae_loss(x, recon, mu, logvar, beta=1.0):
     recon_loss = F.mse_loss(recon, x, reduction="mean")
@@ -106,6 +119,20 @@ def generate_year_of_aqi(model, latent_dim=8):
     samples = samples.numpy()
     samples = samples.reshape(365, 6, 24)
     return samples
+
+def denormalize_and_clamp(samples, aqi_min, aqi_max):
+    denorm = np.zeros_like(samples)
+
+    pollutants = ["CO", "NO2", "O3", "PM25", "PM10", "SO2"]
+
+    for i, pollutant in enumerate(pollutants):
+        min_val = aqi_min[pollutant]
+        max_val = aqi_max[pollutant]
+
+        denorm[:, i, :] = samples[:, i, :] * (max_val - min_val) + min_val
+        denorm[:, i, :] = np.clip(denorm[:, i, :], 0, None)
+
+    return denorm
 
 def flatten_to_hourly_csv_with_total(samples):
     rows = []
@@ -146,7 +173,13 @@ filepaths = {
     "base_gen_AQI/pm10 total 0-10um stp_forecast_2025-12-10_10-58-28.csv"
 }
 
+# added to make sure that AQI data looks normal
+aqi_min, aqi_max = extract_min_max(filepaths)
+
 model = train_joint_vae(filepaths)
+
 samples = generate_year_of_aqi(model)
+samples = denormalize_and_clamp(samples, aqi_min, aqi_max)
+
 df = flatten_to_hourly_csv_with_total(samples)
 df.to_csv("synthetic_aqi_year.csv", index=False)
